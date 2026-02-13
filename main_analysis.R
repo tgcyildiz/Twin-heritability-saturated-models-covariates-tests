@@ -238,8 +238,26 @@ for (phenotype in PHENOTYPES) {
                                 free = TRUE, values = SV_MEANS, newlabels = "mZ")
   modelEMVZ <- omxSetParameters(modelEMVZ, label = c("vMZ", "vDZ"), 
                                 free = TRUE, values = SV_VARIANCE, newlabels = "vZ")
+  modelEMVZ <- mxModel(modelEMVZ,
+                       mxAlgebra(MZ.covMZ[2, 1] / MZ.covMZ[1, 1], name = "rMZ"),
+                       mxAlgebra(DZ.covDZ[2, 1] / DZ.covDZ[1, 1], name = "rDZ"),
+                       mxCI(c("rMZ", "rDZ")))
   fitEMVZ <- run_model_safe(modelEMVZ, intervals = COMPUTE_CI, 
                            use_tryhard = USE_MXTRYHARD, max_attempts = MAX_ATTEMPTS)
+
+  if (!is.null(fitEMVZ)) {
+    rMZ_val <- mxEval(rMZ, fitEMVZ)
+    rDZ_val <- mxEval(rDZ, fitEMVZ)
+    cat(sprintf("\nEstimated twin correlations (rMZ, rDZ): %.4f, %.4f\n", rMZ_val, rDZ_val))
+
+    if (COMPUTE_CI) {
+      ci_table <- summary(fitEMVZ)$CI
+      if (!is.null(ci_table)) {
+        cat("\nCorrelation CIs (rMZ, rDZ):\n")
+        print(ci_table[rownames(ci_table) %in% c("rMZ", "rDZ"), , drop = FALSE])
+      }
+    }
+  }
   
   # ---- Model Comparison ----
   
