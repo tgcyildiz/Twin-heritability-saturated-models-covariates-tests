@@ -1,0 +1,40 @@
+# Add large data files, sensitive information, and outputs
+data/*.csv
+data/*.txt
+data/*.xlsx
+
+# Ignore output files (they can be regenerated)
+output/
+*.txt
+*.log
+
+# R specific
+.Rhistory
+.RData
+.Rproj.user
+*.Rproj
+
+# System files
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Personal configuration (if you want users to create their own)
+# config.R
+
+# IDE specific
+.vscode/
+.idea/
+*.sublime-*
+
+# Compiled files
+*.o
+*.so
+*.dll
