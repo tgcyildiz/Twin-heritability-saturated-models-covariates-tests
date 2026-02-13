@@ -133,13 +133,10 @@ install.packages(c("OpenMx", "psych", "polycor", "mets"))
 - Ensure sufficient sample size
 - Check for multicollinearity in covariates
 
-## License
-
-[Specify your license]
 
 ## Contact
 
-[Your information]
+tugce.yildizahola@ki.se
 
 ## Citation
 
