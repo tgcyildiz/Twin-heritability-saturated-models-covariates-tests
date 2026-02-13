@@ -102,6 +102,7 @@ for (phenotype in PHENOTYPES) {
   output_txt <- file.path(LOG_DIR, paste0(phenotype, "_saturated.txt"))
   output_tests_csv <- file.path(RESULTS_DIR, paste0(phenotype, "_model_tests.csv"))
   output_cov_csv <- file.path(RESULTS_DIR, paste0(phenotype, "_covariate_tests.csv"))
+  output_cor_csv <- file.path(RESULTS_DIR, "twin_correlations.csv")
   
   # Start logging
   sink(file = output_txt)
@@ -250,6 +251,7 @@ for (phenotype in PHENOTYPES) {
     rDZ_val <- mxEval(rDZ, fitEMVZ)
     cat(sprintf("\nEstimated twin correlations (rMZ, rDZ): %.4f, %.4f\n", rMZ_val, rDZ_val))
 
+    ci_table <- NULL
     if (COMPUTE_CI) {
       ci_table <- summary(fitEMVZ)$CI
       if (!is.null(ci_table)) {
@@ -257,6 +259,39 @@ for (phenotype in PHENOTYPES) {
         print(ci_table[rownames(ci_table) %in% c("rMZ", "rDZ"), , drop = FALSE])
       }
     }
+
+    cor_row <- data.frame(
+      phenotype = phenotype,
+      rMZ = rMZ_val,
+      rDZ = rDZ_val,
+      rMZ_lbound = NA_real_,
+      rMZ_ubound = NA_real_,
+      rDZ_lbound = NA_real_,
+      rDZ_ubound = NA_real_,
+      stringsAsFactors = FALSE
+    )
+
+    if (!is.null(ci_table)) {
+      rMZ_ci <- ci_table["rMZ", , drop = FALSE]
+      rDZ_ci <- ci_table["rDZ", , drop = FALSE]
+      if (nrow(rMZ_ci) == 1) {
+        cor_row$rMZ_lbound <- rMZ_ci[, "lbound"]
+        cor_row$rMZ_ubound <- rMZ_ci[, "ubound"]
+      }
+      if (nrow(rDZ_ci) == 1) {
+        cor_row$rDZ_lbound <- rDZ_ci[, "lbound"]
+        cor_row$rDZ_ubound <- rDZ_ci[, "ubound"]
+      }
+    }
+
+    write.table(
+      cor_row,
+      file = output_cor_csv,
+      sep = ",",
+      append = file.exists(output_cor_csv),
+      col.names = !file.exists(output_cor_csv),
+      row.names = FALSE
+    )
   }
   
   # ---- Model Comparison ----
