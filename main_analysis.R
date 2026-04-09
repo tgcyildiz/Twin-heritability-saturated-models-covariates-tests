@@ -20,7 +20,8 @@ for (pkg in required_packages) {
 }
 
 # Load configuration and helper functions
-source("config.R")
+config_file <- Sys.getenv("HERIT_CONFIG", unset = "config.R")
+source(config_file)
 source("helper_functions.R")
 
 cat("\n============================================================\n")
@@ -29,6 +30,31 @@ cat("============================================================\n\n")
 
 # Print session info for reproducibility
 print_session_info()
+
+safe_write_csv <- function(df, primary_file, fallback_file = NULL) {
+  write_ok <- tryCatch({
+    write.csv(df, primary_file, row.names = FALSE)
+    TRUE
+  }, error = function(e) {
+    FALSE
+  }, warning = function(w) {
+    FALSE
+  })
+
+  if (write_ok) return(primary_file)
+
+  if (is.null(fallback_file)) {
+    fallback_file <- file.path(
+      dirname(primary_file),
+      paste0(tools::file_path_sans_ext(basename(primary_file)), "_", format(Sys.time(), "%Y%m%d_%H%M%S"), ".csv")
+    )
+  }
+
+  write.csv(df, fallback_file, row.names = FALSE)
+  warning(sprintf("Could not write to %s (possibly locked). Wrote to fallback file: %s",
+                  primary_file, fallback_file))
+  fallback_file
+}
 
 # ---- Load Data ----
 
@@ -47,6 +73,19 @@ if (PRINT_DESCRIPTIVES) {
 cat("\n============================================================\n")
 cat(sprintf("Starting analysis for %d phenotypes...\n", length(PHENOTYPES)))
 cat("============================================================\n\n")
+
+emvz_coef_file <- file.path(RESULTS_DIR, "covariate_coefficients_emvz.csv")
+emvz_coef_fallback_file <- file.path(
+  RESULTS_DIR,
+  paste0("covariate_coefficients_emvz_", format(Sys.time(), "%Y%m%d_%H%M%S"), ".csv")
+)
+emvz_results <- data.frame(
+  Lobule = character(),
+  Age_Coefficient = numeric(),
+  Sex_Coefficient = numeric(),
+  ICV_Coefficient = numeric(),
+  stringsAsFactors = FALSE
+)
 
 for (phenotype in PHENOTYPES) {
   
@@ -247,8 +286,32 @@ for (phenotype in PHENOTYPES) {
                            use_tryhard = USE_MXTRYHARD, max_attempts = MAX_ATTEMPTS)
 
   if (!is.null(fitEMVZ)) {
-    rMZ_val <- mxEval(rMZ, fitEMVZ)
-    rDZ_val <- mxEval(rDZ, fitEMVZ)
+    sumEMVZ <- summary(fitEMVZ, verbose = FALSE)
+    if (!is.null(sumEMVZ$parameters)) {
+      par_df <- as.data.frame(sumEMVZ$parameters)
+      get_beta <- function(beta_label) {
+        if (!all(c("name", "Estimate") %in% colnames(par_df))) return(NA_real_)
+        idx <- which(par_df$name == beta_label)
+        if (length(idx) == 0) return(NA_real_)
+        suppressWarnings(as.numeric(par_df$Estimate[idx[1]]))
+      }
+
+      emvz_row <- data.frame(
+        Lobule = phenotype,
+        Age_Coefficient = get_beta("betaA"),
+        Sex_Coefficient = get_beta("betaS"),
+        ICV_Coefficient = get_beta("betaE"),
+        stringsAsFactors = FALSE
+      )
+
+      emvz_results <- rbind(emvz_results, emvz_row)
+      safe_write_csv(emvz_results, emvz_coef_file, emvz_coef_fallback_file)
+    }
+
+    rMZ_val <- tryCatch(mxEval(rMZ, fitEMVZ), error = function(e) numeric(0))
+    rDZ_val <- tryCatch(mxEval(rDZ, fitEMVZ), error = function(e) numeric(0))
+    if (length(rMZ_val) != 1) rMZ_val <- NA_real_
+    if (length(rDZ_val) != 1) rDZ_val <- NA_real_
     cat(sprintf("\nEstimated twin correlations (rMZ, rDZ): %.4f, %.4f\n", rMZ_val, rDZ_val))
 
     ci_table <- NULL
@@ -256,7 +319,10 @@ for (phenotype in PHENOTYPES) {
       ci_table <- summary(fitEMVZ)$CI
       if (!is.null(ci_table)) {
         cat("\nCorrelation CIs (rMZ, rDZ):\n")
-        print(ci_table[rownames(ci_table) %in% c("rMZ", "rDZ"), , drop = FALSE])
+        rn <- rownames(ci_table)
+        idx_mz <- if (is.null(rn)) integer(0) else grep("(^|\\.)rMZ($|\\[|\\.)", rn)
+        idx_dz <- if (is.null(rn)) integer(0) else grep("(^|\\.)rDZ($|\\[|\\.)", rn)
+        print(ci_table[c(idx_mz, idx_dz), , drop = FALSE])
       }
     }
 
@@ -272,15 +338,23 @@ for (phenotype in PHENOTYPES) {
     )
 
     if (!is.null(ci_table)) {
-      rMZ_ci <- ci_table["rMZ", , drop = FALSE]
-      rDZ_ci <- ci_table["rDZ", , drop = FALSE]
-      if (nrow(rMZ_ci) == 1) {
-        cor_row$rMZ_lbound <- rMZ_ci[, "lbound"]
-        cor_row$rMZ_ubound <- rMZ_ci[, "ubound"]
+      rn <- rownames(ci_table)
+      idx_mz <- if (is.null(rn)) integer(0) else grep("(^|\\.)rMZ($|\\[|\\.)", rn)
+      idx_dz <- if (is.null(rn)) integer(0) else grep("(^|\\.)rDZ($|\\[|\\.)", rn)
+
+      if (length(idx_mz) > 0) {
+        rMZ_ci <- ci_table[idx_mz[1], , drop = FALSE]
+        if ("lbound" %in% colnames(rMZ_ci) && "ubound" %in% colnames(rMZ_ci)) {
+          cor_row$rMZ_lbound <- rMZ_ci[, "lbound"]
+          cor_row$rMZ_ubound <- rMZ_ci[, "ubound"]
+        }
       }
-      if (nrow(rDZ_ci) == 1) {
-        cor_row$rDZ_lbound <- rDZ_ci[, "lbound"]
-        cor_row$rDZ_ubound <- rDZ_ci[, "ubound"]
+      if (length(idx_dz) > 0) {
+        rDZ_ci <- ci_table[idx_dz[1], , drop = FALSE]
+        if ("lbound" %in% colnames(rDZ_ci) && "ubound" %in% colnames(rDZ_ci)) {
+          cor_row$rDZ_lbound <- rDZ_ci[, "lbound"]
+          cor_row$rDZ_ubound <- rDZ_ci[, "ubound"]
+        }
       }
     }
 
@@ -302,9 +376,12 @@ for (phenotype in PHENOTYPES) {
     print(model_comparison)
     
     # Save model comparison
-    save_results(as.data.frame(model_comparison), 
-                basename(output_tests_csv), 
-                dirname(output_tests_csv))
+    model_comparison_df <- tryCatch(as.data.frame(model_comparison), error = function(e) NULL)
+    if (!is.null(model_comparison_df) && nrow(model_comparison_df) > 0) {
+      save_results(model_comparison_df,
+                  basename(output_tests_csv),
+                  dirname(output_tests_csv))
+    }
   }
   
   # ---- Covariate Tests ----
@@ -327,9 +404,12 @@ for (phenotype in PHENOTYPES) {
     print(cov_comparison)
     
     # Save covariate comparison
-    save_results(as.data.frame(cov_comparison), 
-                basename(output_cov_csv), 
-                dirname(output_cov_csv))
+    cov_comparison_df <- tryCatch(as.data.frame(cov_comparison), error = function(e) NULL)
+    if (!is.null(cov_comparison_df) && nrow(cov_comparison_df) > 0) {
+      save_results(cov_comparison_df,
+                  basename(output_cov_csv),
+                  dirname(output_cov_csv))
+    }
   }
   
   # Stop logging
@@ -351,3 +431,7 @@ cat("\nCheck the following directories:\n")
 cat(sprintf("  - Logs: %s\n", LOG_DIR))
 cat(sprintf("  - Results: %s\n", RESULTS_DIR))
 cat("\n")
+
+if (nrow(emvz_results) > 0) {
+  safe_write_csv(emvz_results, emvz_coef_file, emvz_coef_fallback_file)
+}

@@ -7,6 +7,7 @@
 # ---- Data Configuration ----
 
 # Path to twin data CSV file
+# Place your twin data CSV in the data/ subfolder and update this path
 DATA_PATH <- "data/twin_data.csv"
 
 # Twin pair identifier column
@@ -22,36 +23,21 @@ ETIV_COLS <- c("eTIV1", "eTIV2")
 
 # Phenotypes to analyze (suffix 1,2 will be added automatically)
 PHENOTYPES <- c(
-  "Total_Cerebel_Vol",
-  "Left_VIIB",
-  "Corpus_Medullare",
-  "Left_Crus_I",
-  "Left_Crus_II",
-  "Left_I_III",
-  "Left_IV",
-  "Left_IX",
-  "Left_V",
-  "Left_VI",
-  "Left_VIIIA",
-  "Left_VIIIB",
-  "Left_X",
-  "Right_Crus_I",
-  "Right_Crus_II",
-  "Right_I_III",
-  "Right_IX",
-  "Right_V",
-  "Right_VI",
-  "Right_VIIB",
-  "Right_VIIIA",
-  "Right_VIIIB",
-  "Right_X",
-  "Right_IV",
-  "Vermis_IX",
-  "Vermis_VI",
-  "Vermis_VII",
-  "Vermis_VIII",
-  "Vermis_X"
+  "Total_Cerebel_Vol", "Left_I_III", "Right_I_III", "Left_IV", "Right_VI", "Left_V",
+  
+  "Right_V", "Left_VI", "Right_IV", "Left_Crus_I", "Right_Crus_I",
+  
+  "Left_Crus_II", "Right_Crus_II", "Left_VIIB", "Right_VIIB",
+  
+  "Left_VIIIA", "Right_VIIIA", "Left_VIIIB", "Right_VIIIB",
+  
+  "Left_IX", "Right_IX", "Left_X", "Right_X", "Vermis_VI",
+  
+  "Vermis_VII", "Vermis_VIII", "Vermis_IX", "Vermis_X",
+  
+  "Corpus_Medullare"
 )
+
 
 # ---- Output Configuration ----
 
@@ -112,7 +98,6 @@ GRAND_SCALE <- TRUE
 
 # Create output directories if they don't exist
 if (!dir.exists(OUTPUT_DIR)) {
-  dir.create(OUTPUT_DIR, recursive = TRUE)
 }
 if (!dir.exists(LOG_DIR)) {
   dir.create(LOG_DIR, recursive = TRUE)
